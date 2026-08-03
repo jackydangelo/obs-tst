@@ -1,7 +1,7 @@
 {
   "id": "property-from-backlink",
   "name": "Property from backlink",
-  "version": "1.0.3",
+  "version": "1.0.5",
   "minAppVersion": "1.4.4",
   "description": "Add a frontmatter property to all notes linking to the current note.",
   "author": "jackydangelo",
