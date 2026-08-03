@@ -1,7 +1,7 @@
 {
   "id": "hello-world-plugin",
   "name": "Hello World",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "minAppVersion": "1.4.4",
   "description": "Setup di sviluppo e test, base per i prossimi plugin.",
   "author": "Giacomo",
