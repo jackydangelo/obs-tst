@@ -6,12 +6,12 @@ export default class MocTaggerPlugin extends Plugin {
 	async onload() {
 		this.addCommand({
 			id: 'tag-backlinks-as-moc',
-			name: 'Tagga i backlink di questa nota come MOC',
+			name: 'Tag backlinks of this note as moc',
 			checkCallback: (checking: boolean) => {
 				const file = this.app.workspace.getActiveFile();
 				if (!file) return false;
 				if (!checking) {
-					this.tagBacklinks(file);
+					void this.tagBacklinks(file);
 				}
 				return true;
 			}
@@ -36,7 +36,7 @@ export default class MocTaggerPlugin extends Plugin {
 			const file = this.app.vault.getAbstractFileByPath(path);
 			if (!(file instanceof TFile)) continue;
 
-			await this.app.fileManager.processFrontMatter(file, (fm) => {
+			await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
 				const existing = fm[MOC_PROPERTY];
 
 				if (existing === undefined || existing === null) {
