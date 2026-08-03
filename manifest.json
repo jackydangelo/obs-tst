@@ -1,9 +1,9 @@
 {
-  "id": "hello-world-plugin",
-  "name": "Hello World",
+  "id": "property-from-backlink",
+  "name": "Property from backlink",
   "version": "1.0.3",
   "minAppVersion": "1.4.4",
-  "description": "Setup di sviluppo e test, base per i prossimi plugin.",
-  "author": "Giacomo",
+  "description": "Add a frontmatter property to all notes linking to the current note.",
+  "author": "jackydangelo",
   "isDesktopOnly": false
 }
