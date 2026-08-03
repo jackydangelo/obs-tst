@@ -1,12 +1,15 @@
 import { Notice, Plugin, TFile } from 'obsidian';
+import { DEFAULT_SETTINGS, PropertyFromBacklinkSettingTab, PropertyFromBacklinkSettings } from './settings';
 
-const MOC_PROPERTY = 'moc';
+export default class PropertyFromBacklinkPlugin extends Plugin {
+	settings!: PropertyFromBacklinkSettings;
 
-export default class MocTaggerPlugin extends Plugin {
 	async onload() {
+		await this.loadSettings();
+
 		this.addCommand({
-			id: 'tag-backlinks-as-moc',
-			name: 'Tag backlinks of this note as moc',
+			id: 'tag-backlinks-with-property',
+			name: 'Tag backlinks of this note with property',
 			checkCallback: (checking: boolean) => {
 				const file = this.app.workspace.getActiveFile();
 				if (!file) return false;
@@ -16,16 +19,28 @@ export default class MocTaggerPlugin extends Plugin {
 				return true;
 			}
 		});
+
+		this.addSettingTab(new PropertyFromBacklinkSettingTab(this.app, this));
 	}
 
-	async tagBacklinks(mocFile: TFile) {
-		const mocName = mocFile.basename;
+	async loadSettings() {
+			const savedData = (await this.loadData()) as Partial<PropertyFromBacklinkSettings> | null;
+			this.settings = Object.assign({}, DEFAULT_SETTINGS, savedData ?? {});
+		}
+
+	async saveSettings() {
+		await this.saveData(this.settings);
+	}
+
+	async tagBacklinks(sourceFile: TFile) {
+		const propertyName = this.settings.propertyName;
+		const propertyValue = sourceFile.basename;
 		const resolvedLinks = this.app.metadataCache.resolvedLinks;
 		const backlinkPaths: string[] = [];
 
-		for (const sourcePath in resolvedLinks) {
-			if (resolvedLinks[sourcePath]?.[mocFile.path]) {
-				backlinkPaths.push(sourcePath);
+		for (const path in resolvedLinks) {
+			if (resolvedLinks[path]?.[sourceFile.path]) {
+				backlinkPaths.push(path);
 			}
 		}
 
@@ -37,28 +52,28 @@ export default class MocTaggerPlugin extends Plugin {
 			if (!(file instanceof TFile)) continue;
 
 			await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
-				const existing = fm[MOC_PROPERTY];
+				const existing = fm[propertyName];
 
 				if (existing === undefined || existing === null) {
-					fm[MOC_PROPERTY] = mocName;
+					fm[propertyName] = propertyValue;
 					updated++;
 				} else if (Array.isArray(existing)) {
-					if (!existing.includes(mocName)) {
-						existing.push(mocName);
+					if (!existing.includes(propertyValue)) {
+						existing.push(propertyValue);
 						updated++;
 					} else {
 						skipped++;
 					}
-				} else if (existing === mocName) {
+				} else if (existing === propertyValue) {
 					skipped++;
 				} else {
-					fm[MOC_PROPERTY] = [existing, mocName];
+					fm[propertyName] = [existing, propertyValue];
 					updated++;
 				}
 			});
 		}
 
-		new Notice(`MOC Tagger: ${updated} note aggiornate, ${skipped} già a posto.`);
+		new Notice(`Property from backlink: ${updated} note(s) updated, ${skipped} already up to date.`);
 	}
 
 	onunload(): void {}
