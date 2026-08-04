@@ -29,7 +29,8 @@ export class PropertyFromBacklinkSettingTab extends PluginSettingTab {
 					.setPlaceholder(DEFAULT_SETTINGS.propertyName)
 					.setValue(this.plugin.settings.propertyName)
 					.onChange(async (value) => {
-						this.plugin.settings.propertyName = value.trim() || DEFAULT_SETTINGS.propertyName;
+						const sanitized = value.trim().replace(/[^a-zA-Z0-9_-]/g, '');
+						this.plugin.settings.propertyName = sanitized || DEFAULT_SETTINGS.propertyName;
 						await this.plugin.saveSettings();
 					})
 			);
