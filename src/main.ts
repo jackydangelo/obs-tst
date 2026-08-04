@@ -49,7 +49,7 @@ export default class PropertyFromBacklinkPlugin extends Plugin {
 
 		for (const path of backlinkPaths) {
 			const file = this.app.vault.getAbstractFileByPath(path);
-			if (!(file instanceof TFile)) continue;
+			if (!(file instanceof TFile || file.extension !== 'md') continue;
 
 			await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
 				const existing = fm[propertyName];
