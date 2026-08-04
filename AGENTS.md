@@ -1,269 +1,138 @@
-# Obsidian community plugin
+# AGENTS.md
+
+Instructions for AI coding agents (Claude Code, Copilot, etc.) working on this repository.
 
 ## Project overview
 
-- Target: Obsidian Community Plugin (TypeScript → bundled JavaScript).
-- Entry point: `src/main.ts` compiled to `main.js` and loaded by Obsidian.
-- Required release artifacts: `main.js`, `manifest.json`, and optional `styles.css`.
+**Property from Backlink** is an Obsidian community plugin. It adds a frontmatter
+property to every note that links to the currently open note, using the current
+note's name as the value. Typical use case: tagging every note that belongs to a
+Map of Content (MOC) / hub note, PARA-style, without doing it by hand.
 
-## Environment & tooling
+Core logic lives in two files:
+- `src/main.ts` — plugin entry point, command registration, backlink resolution,
+  frontmatter mutation.
+- `src/settings.ts` — settings tab UI and the persisted settings shape
+  (currently a single field: `propertyName`).
 
-- Node.js: use current LTS (Node 18+ recommended).
-- **Package manager: npm** (required for this sample - `package.json` defines npm scripts and dependencies).
-- **Bundler: esbuild** (required for this sample - `esbuild.config.mjs` and build scripts depend on it). Alternative bundlers like Rollup or webpack are acceptable for other projects if they bundle all external dependencies into `main.js`.
-- Types: `obsidian` type definitions.
+## Environment constraints (important)
 
-**Note**: This sample project has specific technical dependencies on npm and esbuild. If you're creating a plugin from scratch, you can choose different tools, but you'll need to replace the build configuration accordingly.
+This project may be built on one machine and tested on another (desktop,
+mobile, or a different platform entirely) by syncing the repository directly
+into an Obsidian vault's `.obsidian/plugins/property-from-backlink/` folder,
+rather than always building and testing on the same device. **Agents must
+respect this, not "fix" it**:
 
-### Install
+- Because of this, **`main.js` is intentionally committed to the repository**,
+  unlike the default Obsidian sample plugin template (which gitignores it and
+  expects it to be built locally and attached only to GitHub Releases). A
+  plain `git pull`/sync of the repo should be enough to get a working plugin
+  build into a vault, without requiring Node.js on the testing device. Do not
+  reintroduce `main.js` to `.gitignore`, and do not assume `main.js` is a
+  build-only artifact — committing it after every source change is part of
+  the normal workflow.
+- Never assume the build and the test environment are the same machine or the
+  same OS. Don't rely on or introduce anything platform-specific
+  (desktop-only Node APis, absolute local paths, OS-specific scripts) unless
+  it's genuinely required by the Obsidian API itself.
+- `data.json` (per-vault plugin settings) must stay gitignored. Never commit it.
+
+## Build & verification commands
+
+Always run both before considering a change complete:
 
 ```bash
-npm install
+npm run build   # tsc type-check + esbuild production bundle -> main.js
+npm run lint    # eslint, includes eslint-plugin-obsidianmd rules
 ```
 
-### Dev (watch)
+Zero errors and zero warnings from `npm run lint` is the bar — this repo's
+lint config includes Obsidian-specific rules (`obsidianmd/...`) that are also
+enforced by the official plugin review bot when this plugin is submitted or
+updated in the community plugin directory. Treat every rule from this plugin
+as a hard requirement, not a style suggestion.
 
-```bash
-npm run dev
-```
+`npm run dev` runs esbuild in watch mode. It does **not** survive a Codespaces
+timeout/restart — after any interruption, verify it's still running before
+assuming `main.js` is up to date. When in doubt, run `npm run build` once
+explicitly rather than trusting a possibly-dead watch process.
 
-### Production build
+## Versioning workflow
 
-```bash
-npm run build
-```
+Three files must stay in sync on every version bump:
+- `manifest.json` → `version`
+- `package.json` → `version`
+- `versions.json` → new `"x.y.z": "<minAppVersion>"` entry
 
-## Linting
+Tags must exactly match the plugin version with **no `v` prefix**
+(e.g. `1.0.0`, not `v1.0.0`) — `.npmrc` (`tag-version-prefix=""`) already
+enforces this if using `npm version <patch|minor|major>`. Obsidian and BRAT
+both resolve releases by exact string match against `manifest.json`'s
+`version`, so any mismatch breaks update detection.
 
-- ESLint is preconfigured with `eslint-plugin-obsidianmd` for Obsidian-specific rules.
-- Run `npm run lint` to lint the project.
-- A GitHub Action automatically lints every commit on all branches.
+For minor/local testing iterations, it is acceptable and expected to just
+commit + push to `main` without bumping version/tag/release — the maintainer
+pulls directly into the test vault via Working Copy. Reserve version bumps,
+tags, and GitHub Releases for meaningful checkpoints (BRAT-trackable betas,
+or the eventual community plugin submission).
 
-## File & folder conventions
+## Code conventions
 
-- **Organize code into multiple files**: Split functionality across separate modules rather than putting everything in `main.ts`.
-- Source lives in `src/`. Keep `main.ts` small and focused on plugin lifecycle (loading, unloading, registering commands).
-- **Example file structure**:
-    ```
-    src/
-      main.ts           # Plugin entry point, lifecycle management
-      settings.ts       # Settings interface and defaults
-      commands/         # Command implementations
-        command1.ts
-        command2.ts
-      ui/              # UI components, modals, views
-        modal.ts
-        view.ts
-      utils/           # Utility functions, helpers
-        helpers.ts
-        constants.ts
-      types.ts         # TypeScript interfaces and types
-    ```
-- **Do not commit build artifacts**: Never commit `node_modules/`, `main.js`, or other generated files to version control.
-- Keep the plugin small. Avoid large dependencies. Prefer browser-compatible packages.
-- Generated output should be placed at the plugin root or `dist/` depending on your build setup. Release artifacts must end up at the top level of the plugin folder in the vault (`main.js`, `manifest.json`, `styles.css`).
+- TypeScript, strict mode. Do not introduce `any` — the lint config
+  (`@typescript-eslint/no-unsafe-*` rules) will reject it. When dealing with
+  Obsidian APIs that return loosely-typed data (e.g. `loadData()`,
+  `processFrontMatter`'s callback parameter), annotate explicitly
+  (`Partial<Settings> | null`, `Record<string, unknown>`, etc.) rather than
+  suppressing the rule.
+- Tabs for indentation, single quotes — see `.editorconfig`, keep it that way.
+- All user-facing strings (command names, setting labels/descriptions, notices)
+  must be in English and use sentence case (`obsidianmd/ui/sentence-case`
+  lint rule) — e.g. "Tag backlinks of this note with property", not
+  "Tag Backlinks Of This Note With Property".
+- Frontmatter mutation must always go through
+  `app.fileManager.processFrontMatter()` — never hand-parse or regex the raw
+  file content for YAML frontmatter.
+- Any code that iterates `app.metadataCache.resolvedLinks` and resolves paths
+  to files must filter for `file instanceof TFile && file.extension === 'md'`
+  before treating something as a note. `resolvedLinks` can include non-Markdown
+  files (e.g. `.canvas`).
+- Preserve idempotency: re-running the tagging command on the same source note
+  must never create duplicate values in the target property. This is a
+  functional requirement, not just a nice-to-have — cover it when touching
+  `tagBacklinks()`.
+- Preserve non-destructiveness: existing frontmatter values on a target note
+  must never be silently overwritten or dropped. A different existing value
+  becomes part of a list; it is never replaced.
+- Commands must use `checkCallback` and return `false` when there's no active
+  file, so the command simply doesn't appear in the command palette rather
+  than appearing and failing. Don't replace this with an always-visible
+  command plus an error notice.
 
-## Manifest rules (`manifest.json`)
+## Settings
 
-- Must include (non-exhaustive):
-    - `id` (plugin ID; for local dev it should match the folder name)
-    - `name`
-    - `version` (Semantic Versioning `x.y.z`)
-    - `minAppVersion`
-    - `description`
-    - `isDesktopOnly` (boolean)
-    - Optional: `author`, `authorUrl`, `fundingUrl` (string or map)
-- Never change `id` after release. Treat it as stable API.
-- Keep `minAppVersion` accurate when using newer APIs.
-- Canonical requirements are coded here: https://github.com/obsidianmd/obsidian-releases/blob/master/.github/workflows/validate-plugin-entry.yml
+`propertyName` (default `'moc'`) is the only setting. When editing it,
+sanitize input to `[a-zA-Z0-9_-]` only (see the `onChange` handler in
+`settings.ts`) — the value becomes a literal YAML frontmatter key, so
+characters like `:` must never reach `saveSettings()` unsanitized. If adding
+new settings, apply the same sanitize-before-persist principle to anything
+that ends up as a frontmatter key or is otherwise YAML-sensitive.
 
-## Testing
+## Things NOT to reintroduce
 
-- Manual install for testing: copy `main.js`, `manifest.json`, `styles.css` (if any) to:
-    ```
-    <Vault>/.obsidian/plugins/<plugin-id>/
-    ```
-- Reload Obsidian and enable the plugin in **Settings → Community plugins**.
+This repo started from `obsidian-sample-plugin` and was deliberately stripped
+down. Do not bring back, even accidentally via a template merge or copy-paste:
+- `SampleModal`, `SampleSettingTab`, or any class with "Sample" in the name.
+- The `registerInterval` demo call.
+- `console.log` calls (`no-console` lint rule — use `Notice` for user-facing
+  feedback, nothing for debug-only output).
+- A ribbon icon — this plugin is command-only, no ribbon icon is needed for
+  its current feature set. Don't add one back without an explicit reason.
 
-## Commands & settings
+## Publication status
 
-- Any user-facing commands should be added via `this.addCommand(...)`.
-- If the plugin has configuration, provide a settings tab and sensible defaults.
-- Persist settings using `this.loadData()` / `this.saveData()`.
-- Use stable command IDs; avoid renaming once released.
-
-## Versioning & releases
-
-- Bump `version` in `manifest.json` (SemVer) and update `versions.json` to map plugin version → minimum app version.
-- Create a GitHub release whose tag exactly matches `manifest.json`'s `version`. Do not use a leading `v`.
-- Attach `manifest.json`, `main.js`, and `styles.css` (if present) to the release as individual assets.
-- After the initial release, follow the process to add/update your plugin in the community catalog as required.
-
-## Security, privacy, and compliance
-
-Follow Obsidian's **Developer Policies** and **Plugin Guidelines**. In particular:
-
-- Default to local/offline operation. Only make network requests when essential to the feature.
-- No hidden telemetry. If you collect optional analytics or call third-party services, require explicit opt-in and document clearly in `README.md` and in settings.
-- Never execute remote code, fetch and eval scripts, or auto-update plugin code outside of normal releases.
-- Minimize scope: read/write only what's necessary inside the vault. Do not access files outside the vault.
-- Clearly disclose any external services used, data sent, and risks.
-- Respect user privacy. Do not collect vault contents, filenames, or personal information unless absolutely necessary and explicitly consented.
-- Avoid deceptive patterns, ads, or spammy notifications.
-- Register and clean up all DOM, app, and interval listeners using the provided `register*` helpers so the plugin unloads safely.
-
-## UX & copy guidelines (for UI text, commands, settings)
-
-- Prefer sentence case for headings, buttons, and titles.
-- Use clear, action-oriented imperatives in step-by-step copy.
-- Use **bold** to indicate literal UI labels. Prefer "select" for interactions.
-- Use arrow notation for navigation: **Settings → Community plugins**.
-- Keep in-app strings short, consistent, and free of jargon.
-
-## Performance
-
-- Keep startup light. Defer heavy work until needed.
-- Avoid long-running tasks during `onload`; use lazy initialization.
-- Batch disk access and avoid excessive vault scans.
-- Debounce/throttle expensive operations in response to file system events.
-
-## Coding conventions
-
-- TypeScript with `"strict": true` preferred.
-- **Keep `main.ts` minimal**: Focus only on plugin lifecycle (onload, onunload, addCommand calls). Delegate all feature logic to separate modules.
-- **Split large files**: If any file exceeds ~200-300 lines, consider breaking it into smaller, focused modules.
-- **Use clear module boundaries**: Each file should have a single, well-defined responsibility.
-- Bundle everything into `main.js` (no unbundled runtime deps).
-- Avoid Node/Electron APIs if you want mobile compatibility; set `isDesktopOnly` accordingly.
-- Prefer `async/await` over promise chains; handle errors gracefully.
-
-## Mobile
-
-- Where feasible, test on iOS and Android.
-- Don't assume desktop-only behavior unless `isDesktopOnly` is `true`.
-- Avoid large in-memory structures; be mindful of memory and storage constraints.
-
-## Agent do/don't
-
-**Do**
-
-- Add commands with stable IDs (don't rename once released).
-- Provide defaults and validation in settings.
-- Write idempotent code paths so reload/unload doesn't leak listeners or intervals.
-- Use `this.register*` helpers for everything that needs cleanup.
-
-**Don't**
-
-- Introduce network calls without an obvious user-facing reason and documentation.
-- Ship features that require cloud services without clear disclosure and explicit opt-in.
-- Store or transmit vault contents unless essential and consented.
-
-## Common tasks
-
-### Organize code across multiple files
-
-**main.ts** (minimal, lifecycle only):
-
-```ts
-import { Plugin } from 'obsidian';
-import { MySettings, DEFAULT_SETTINGS } from './settings';
-import { registerCommands } from './commands';
-
-export default class MyPlugin extends Plugin {
-	settings!: MySettings;
-
-	async onload() {
-		this.settings = Object.assign(
-			{},
-			DEFAULT_SETTINGS,
-			(await this.loadData()) as Partial<MySettings>,
-		);
-		registerCommands(this);
-	}
-}
-```
-
-**settings.ts**:
-
-```ts
-export interface MySettings {
-	enabled: boolean;
-	apiKey: string;
-}
-
-export const DEFAULT_SETTINGS: MySettings = {
-	enabled: true,
-	apiKey: '',
-};
-```
-
-**commands/index.ts**:
-
-```ts
-import { Plugin } from 'obsidian';
-import { doSomething } from './my-command';
-
-export function registerCommands(plugin: Plugin) {
-	plugin.addCommand({
-		id: 'do-something',
-		name: 'Do something',
-		callback: () => doSomething(plugin),
-	});
-}
-```
-
-### Add a command
-
-```ts
-this.addCommand({
-	id: 'your-command-id',
-	name: 'Do the thing',
-	callback: () => this.doTheThing(),
-});
-```
-
-### Persist settings
-
-```ts
-interface MySettings { enabled: boolean }
-const DEFAULT_SETTINGS: MySettings = { enabled: true };
-
-async onload() {
-  this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData() as Partial<MySettings>);
-  await this.saveData(this.settings);
-}
-```
-
-### Register listeners safely
-
-```ts
-this.registerEvent(
-	this.app.workspace.on('file-open', (f) => {
-		/* ... */
-	}),
-);
-this.registerDomEvent(activeWindow, 'resize', () => {
-	/* ... */
-});
-this.registerInterval(
-	window.setInterval(() => {
-		/* ... */
-	}, 1000),
-);
-```
-
-## Troubleshooting
-
-- Plugin doesn't load after build: ensure `main.js` and `manifest.json` are at the top level of the plugin folder under `<Vault>/.obsidian/plugins/<plugin-id>/`.
-- Build issues: if `main.js` is missing, run `npm run build` or `npm run dev` to compile your TypeScript source code.
-- Commands not appearing: verify `addCommand` runs after `onload` and IDs are unique.
-- Settings not persisting: ensure `loadData`/`saveData` are awaited and you re-render the UI after changes.
-- Mobile-only issues: confirm you're not using desktop-only APIs; check `isDesktopOnly` and adjust.
-
-## References
-
-- Obsidian sample plugin: https://github.com/obsidianmd/obsidian-sample-plugin
-- API documentation: https://docs.obsidian.md
-- Developer policies: https://docs.obsidian.md/Developer+policies
-- Plugin guidelines: https://docs.obsidian.md/Plugins/Releasing/Plugin+guidelines
-- Style guide: https://help.obsidian.md/style-guide
+This plugin is intended for submission to the official Obsidian community
+plugin directory (`obsidianmd/obsidian-releases`, `community-plugins.json`).
+Keep `README.md`, `LICENSE` (0BSD), and `manifest.json`/`package.json`
+metadata (`name`, `description`, `author`) accurate and in sync with the
+actual current behavior of the plugin — these are read by human reviewers,
+not just by users.
