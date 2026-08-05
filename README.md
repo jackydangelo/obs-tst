@@ -1,5 +1,7 @@
 # Property from Backlink
 
+![Demo of tagging backlinks with a frontmatter property](docs/demo.gif)
+
 Automatically add a frontmatter property to every note that links to a given note, using that note's name as the value.
 
 This is useful for Zettelkasten/PARA-style vaults where you maintain **Maps of Content (MOCs)** or **hub notes**: instead of manually tagging every note that belongs to a MOC, run one command and let the plugin tag all its backlinks for you.
