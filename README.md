@@ -1,6 +1,6 @@
 # Property from Backlink
 
-![Demo of tagging backlinks with a frontmatter property](docs/demo.gif)
+![Demo of tagging backlinks with a frontmatter property](demo.gif)
 
 Automatically add a frontmatter property to every note that links to a given note, using that note's name as the value.
 
